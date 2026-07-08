@@ -97,6 +97,8 @@ qlik-sense-app-analysis/                     — repository root
         ├── qlik-mcp-tool-reference.md       — full tool catalogue by category
         ├── expression-gotchas.md            — Qlik expression / set analysis syntax rules
         ├── governance-workflows.md          — master item / glossary / data product lifecycle rules
+        ├── visualization-guidelines.md      — chart-type selection, rendering fallbacks, dashboard/report pattern
+        ├── design-rationale.md              — the reasoning behind the skill's structure
         └── app-profile-TEMPLATE.md          — copy per app/domain to extend the skill
 ```
 

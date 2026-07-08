@@ -1,6 +1,5 @@
 ---
 name: qlik-sense-app-analysis
-version: 1.0.0
 description: >-
   IF the user asks to explore, analyze, query, chart, dashboard, or govern
   (master items, business glossary, data products) a Qlik Sense app or Qlik
@@ -11,6 +10,16 @@ description: >-
   any question that requires calling qlik_* MCP tools. DO NOT invoke for SQL
   warehouse questions, DW/BI-tool-agnostic data modelling, or requests with
   no Qlik MCP tool involved.
+metadata:
+  author: nabeel-oz
+  version: 1.1.0
+  tags:
+    - qlik
+    - mcp
+    - analytics
+    - governance
+    - data-visualization
+allowed-tools: read
 ---
 
 # Qlik Sense App Analysis Skill
@@ -42,47 +51,15 @@ do not guess.
 
 ## Why this skill looks the way it does
 
-Anthropic's write-up on self-service analytics agents (*How Anthropic enables
-self-service data analytics with Claude*) frames most wrong answers as one of
-three failure modes: **concept-to-entity ambiguity** (which table/field is
-"revenue"?), **staleness** (is this still true?), and **retrieval failure**
-(the right answer existed but the agent never found it). Their fix is a
-stack: canonical datasets, a semantic layer, lineage, and skills that route
-the agent to governed answers before it ever writes ad hoc SQL.
-
-Qlik MCP tools address the same three failure modes, but several layers that
-the warehouse world has to build by hand already exist natively in Qlik
-Cloud:
-
-| Failure mode | Warehouse approach (build it yourself) | Qlik MCP approach (already there) |
-|---|---|---|
-| Entity ambiguity | Curate canonical dbt models, hope people don't duplicate them | **Data Products** (curated, documented datasets) and **Master Items** (governed dimensions/measures) — list before you build |
-| Staleness | Freshness/completeness checks you write and maintain | `qlik_get_dataset_freshness`, `qlik_get_dataset_trust_score`, `qlik_get_dataset_quality_computation_status` are native tool calls |
-| Retrieval failure | Distill a query corpus into reference docs by hand | `qlik_search`, `qlik_list_sheets`, `qlik_get_sheet_details` surface existing apps/charts directly — reuse before rebuilding |
-| Lineage / "where did this come from" | Reconstruct the transformation graph from dbt manifests | `qlik_get_lineage` is a direct tool call (still one hop at a time — call it recursively) |
-| Business glossary | An internal wiki or knowledge graph you pipe in yourself | A structured **Business Glossary** with a draft → verified → deprecated lifecycle, native to the platform |
-| "Raw SQL" fallback | Hand-written SQL, reviewed adversarially before trusting it | `qlik_create_data_object` with a Qlik expression (set analysis) — Qlik performs the calculation, so the review is about *expression correctness*, not aggregation logic |
-
-What's genuinely new and has no warehouse-skill equivalent:
-
-1. **Authoring, not just querying.** The warehouse skill in Anthropic's
-   article only reads. Qlik MCP tools can also *create* governed objects —
-   master dimensions/measures, sheets, charts, data products, glossary terms.
-   That makes this skill part analyst, part steward: every creation action
-   needs the same "is this duplicating something that already exists"
-   discipline as querying does, plus a check before creating something
-   persistent (see [Governance & authoring](#3-governance--authoring-check-before-you-create)).
-2. **Selections are stateful.** SQL queries are stateless — every query
-   states its own filters. Qlik selections persist across tool calls until
-   cleared, and a selection on a value that doesn't exist **fails silently**
-   (no error, the field just doesn't appear in the returned selection state).
-   This is a new class of silent failure the warehouse skill never has to
-   think about. Treat it with the same seriousness the article gives
-   "adversarial SQL review."
-3. **No SQL, ever.** Calculations happen inside Qlik's associative engine.
-   Never re-aggregate, sum, or average data that a Qlik tool already
-   returned — the values are final. If you need a different calculation,
-   call the tool again with a different expression.
+In short: Qlik MCP tools solve the same entity-ambiguity, staleness, and
+retrieval-failure problems a warehouse analytics agent has to solve by hand
+— but several of the layers a warehouse skill builds from scratch (governed
+datasets, lineage, a glossary) already exist natively in Qlik Cloud. In addition two
+things (authoring governed objects, stateful selections) are genuinely new
+territory with no warehouse-skill equivalent. For the full comparison and
+design rationale, see
+[`references/design-rationale.md`](references/design-rationale.md) — read it
+if you want the "why" behind a rule, not just the rule.
 
 ---
 
@@ -133,8 +110,14 @@ several plausible candidates.
    [Silent failure modes](#silent-failure-modes).
 5. Execute: pull chart data, build a temporary data object, or apply
    selections as needed.
-6. Report with the same provenance discipline as any governed analytics
-   answer — see [Reporting with provenance](#4-reporting-with-provenance).
+6. Visualize: render the result as a chart rather than only text once it has
+   more than a couple of data points — see
+   [Visualizing results](#4-visualizing-results--dont-default-to-text). If
+   the question is complex enough to need several stitched-together charts,
+   offer (don't assume) a one-page HTML report — see
+   [Offering a dashboard/report](#5-offering-a-one-page-dashboardreport--after-confirming).
+7. Report with the same provenance discipline as any governed analytics
+   answer — see [Reporting with provenance](#6-reporting-with-provenance).
 
 ### Data integrity rules
 
@@ -222,7 +205,46 @@ Before creating anything:
 Full lifecycle detail (who can do what, in what order) is in
 [`references/governance-workflows.md`](references/governance-workflows.md).
 
-### 4. Reporting with provenance
+### 4. Visualizing results — don't default to text
+
+A wall of text or numbers is a worse answer than a chart once the data has a shape:
+a trend, a comparison across categories, a distribution, a ranking. Default
+to rendering results visually rather than only as prose or a raw data dump —
+inline chart/artifact if your environment supports one, otherwise a clearly
+formatted table.
+
+- **Match the chart to the task**: trend over time → line, compare
+  categories → bar, ranking → sorted horizontal bar, part-to-whole → stacked
+  bar (avoid pie beyond ~5 slices), distribution → histogram, single number
+  → KPI tile.
+- **Reuse before rebuilding**: if `qlik_get_sheet_details` shows this exact
+  cut already has a chart in the app, pull it with `qlik_get_chart_data` and
+  point to where it lives, instead of only rendering a fresh one in chat.
+- **If a chart-design skill/tool is available in your environment**, use it
+  for palette/layout guidance rather than improvising one.
+
+Full chart-type table, rendering fallbacks, and hygiene rules (axis labels,
+sort order, color consistency) are in
+[`references/visualization-guidelines.md`](references/visualization-guidelines.md)
+— read it before building any chart more involved than a single bar/line.
+
+### 5. Offering a one-page dashboard/report — after confirming
+
+When a question is complex enough to need several charts or analyses
+stitched together — a multi-part ask, an "overview"/"summarize" request, an
+executive-style question spanning more than one metric — **offer** a
+self-contained HTML dashboard/report alongside the inline answer, but only
+build it once the user confirms. It's a bigger deliverable than a normal
+chat answer; don't produce one as a side effect of answering a simpler
+question, and don't build it inside the Qlik app itself — that's the
+separately-confirmed `qlik_create_sheet` path in
+[Governance & authoring](#3-governance--authoring-check-before-you-create).
+
+The build pattern (single self-contained file, no external network calls,
+one section per sub-question, provenance per section) is in
+[`references/visualization-guidelines.md`](references/visualization-guidelines.md).
+
+### 6. Reporting with provenance
 
 Close every substantive answer with a short provenance line — it costs
 almost nothing and it's the difference between an answer the user can trust
@@ -232,7 +254,7 @@ and one they have to re-verify themselves:
 > expression] · **Trust score:** [if checked] · **Freshness:** [last
 > updated] · **App/owner:** [app name, owning space]
 
-### 5. Knowledge bases
+### 7. Knowledge bases
 
 If the tenant has Qlik Answers knowledge bases enabled, `qlik_search` with
 `resourceType="knowledgebase"` finds them, and
@@ -297,3 +319,8 @@ See also:
   Qlik expression and set analysis syntax rules.
 - [`references/governance-workflows.md`](references/governance-workflows.md) —
   master item, glossary, and data product lifecycle rules.
+- [`references/visualization-guidelines.md`](references/visualization-guidelines.md) —
+  chart-type selection, rendering fallbacks, hygiene rules, and the
+  dashboard/report build pattern.
+- [`references/design-rationale.md`](references/design-rationale.md) — the
+  reasoning behind this skill's structure, for "why" questions.
