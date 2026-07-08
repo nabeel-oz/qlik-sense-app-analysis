@@ -6,10 +6,10 @@ building a standalone report.
 
 ## Default to visual, not text
 
-A wall of numbers is a worse answer than a chart whenever the data has a
+A wall of text or numbers is a worse answer than a chart whenever the data has a
 shape — a trend, a comparison across categories, a distribution, a ranking.
 If a tool call (`qlik_get_chart_data`, `qlik_create_data_object`, a dataset
-profile) returns more than a couple of data points, render it rather than
+profile) returns more than a couple of data points, render it rather than just
 listing it in prose. Text is fine for a single number, a yes/no, or a
 one-row lookup.
 
@@ -51,14 +51,18 @@ one-row lookup.
 
 ## Chart hygiene
 
+- Aim for quick to scan, easily readable and comprehensible content. 
 - Label axes with units — currency symbol, `%`, or the measure name; a bare
   number is ambiguous.
+- Label data points on charts like scatterplots and show values on barcharts 
+  and line charts whenever density allows.
 - Sort meaningfully: rank order for comparisons/rankings, chronological for
   time series. Alphabetical sort is rarely the right default.
 - Round to a precision the audience will actually use — don't show 4 decimal
   places on a currency KPI.
 - Use one consistent color per series across every chart in the same answer
   or report; don't let the same series shift color between sections.
+- Provide labelled chart legends whenever it would improve readability.
 - Avoid 3D effects entirely — they distort the comparison the chart exists
   to make.
 

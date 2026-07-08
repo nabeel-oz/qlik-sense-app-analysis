@@ -251,8 +251,8 @@ almost nothing and it's the difference between an answer the user can trust
 and one they have to re-verify themselves:
 
 > **Source:** [master item / data product / existing chart / ad hoc
-> expression] · **Trust score:** [if checked] · **Freshness:** [last
-> updated] · **App/owner:** [app name, owning space]
+> expression] · **Trust score:** [if checked] · **Freshness:** [app's last
+> reload timestamp if known] · **App/owner:** [app name, owning space]
 
 ### 7. Knowledge bases
 
